@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useCallback } from "react";
 
 const StateContext = createContext({
   user: null,
@@ -14,21 +14,21 @@ export const ContextProvider = ({ children }) => {
   const [token, _setToken] = useState(localStorage.getItem("ACCESS_TOKEN"));
   const [notification, _setNotification] = useState("");
 
-  const setToken = (token) => {
+  const setToken = useCallback((token) => {
     _setToken(token);
     if (token) {
       localStorage.setItem("ACCESS_TOKEN", token);
     } else {
       localStorage.removeItem("ACCESS_TOKEN");
     }
-  };
+  }, []);
 
-  const setNotification = (message) => {
+  const setNotification = useCallback((message) => {
     _setNotification(message);
     setTimeout(() => {
       _setNotification("");
     }, 5000);
-  };
+  }, []);
 
   return (
     <StateContext.Provider

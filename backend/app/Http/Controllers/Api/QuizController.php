@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreQuizRequest;
+use App\Http\Requests\UpdateQuizRequest;
+use App\Http\Resources\QuizResource;
 use App\Models\Option;
 use App\Models\Quiz;
 use App\Models\Result;
@@ -13,22 +16,14 @@ class QuizController extends Controller
 {
     public function index()
     {
-        return Quiz::with('creator')->latest()->paginate(10);
+        return QuizResource::collection(
+            Quiz::with('creator')->latest()->paginate(10)
+        );
     }
 
-    public function store(Request $request)
+    public function store(StoreQuizRequest $request)
     {
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'questions' => 'required|array|min:1',
-            'questions.*.text' => 'required|string',
-            'questions.*.options' => 'required|array|min:2',
-            'questions.*.options.*.text' => 'required|string',
-            'questions.*.options.*.is_correct' => 'required|boolean',
-        ]);
-
-        return DB::transaction(function () use ($request) {
+        $quiz = DB::transaction(function () use ($request) {
             $quiz = $request->user()->quizzes()->create([
                 'title' => $request->title,
                 'description' => $request->description,
@@ -47,22 +42,61 @@ class QuizController extends Controller
                 }
             }
 
-            return $quiz->load('questions.options');
+            return $quiz;
         });
+
+        return new QuizResource($quiz->load(['questions.options', 'questions.quiz']));
     }
 
     public function show(Quiz $quiz)
     {
-        $quiz->load(['creator', 'questions.options']);
+        // Load relationships needed for resources and policy checks
+        $quiz->load(['creator', 'questions.options', 'questions.quiz']);
+        
+        return new QuizResource($quiz);
+    }
 
-        // Hide correct answers if not the creator
-        if (auth()->id() !== $quiz->created_by) {
-            $quiz->questions->each(function ($question) {
-                $question->options->makeHidden('is_correct');
-            });
+    public function update(UpdateQuizRequest $request, Quiz $quiz)
+    {
+        $quiz = DB::transaction(function () use ($request, $quiz) {
+            $quiz->update([
+                'title' => $request->title,
+                'description' => $request->description,
+            ]);
+
+            // If questions are provided, replace them entirely (simplest strategy for this app)
+            if ($request->has('questions')) {
+                // Delete old questions (and cascading options)
+                $quiz->questions()->delete();
+
+                foreach ($request->questions as $qData) {
+                    $question = $quiz->questions()->create([
+                        'text' => $qData['text'],
+                    ]);
+
+                    foreach ($qData['options'] as $oData) {
+                        $question->options()->create([
+                            'text' => $oData['text'],
+                            'is_correct' => $oData['is_correct'],
+                        ]);
+                    }
+                }
+            }
+
+            return $quiz;
+        });
+
+        return new QuizResource($quiz->load(['questions.options', 'questions.quiz']));
+    }
+
+    public function destroy(Request $request, Quiz $quiz)
+    {
+        if ($request->user()->id !== $quiz->created_by) {
+            abort(403);
         }
-
-        return $quiz;
+        
+        $quiz->delete();
+        return response()->noContent();
     }
 
     public function submit(Request $request, Quiz $quiz)
@@ -86,7 +120,6 @@ class QuizController extends Controller
             }
         }
 
-        // Calculate percentage or raw score? Let's do raw score for now.
         $result = Result::create([
             'user_id' => auth()->id(),
             'quiz_id' => $quiz->id,
@@ -99,21 +132,5 @@ class QuizController extends Controller
             'total' => $totalQuestions,
             'result_id' => $result->id,
         ]);
-    }
-
-    public function update(Request $request, Quiz $quiz)
-    {
-        // For brevity, not implementing full update logic yet (complex with nested relations)
-        return response()->json(['message' => 'Update not implemented yet'], 501);
-    }
-
-    public function destroy(Request $request, Quiz $quiz)
-    {
-        if ($request->user()->id !== $quiz->created_by) {
-            abort(403);
-        }
-        
-        $quiz->delete();
-        return response()->noContent();
     }
 }

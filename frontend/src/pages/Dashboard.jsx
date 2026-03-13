@@ -6,7 +6,7 @@ import { useStateContext } from "../context/ContextProvider";
 export default function Dashboard() {
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { setNotification } = useStateContext();
+  const { setNotification, user } = useStateContext();
 
   const getQuizzes = useCallback(() => {
     setLoading(true);
@@ -61,13 +61,20 @@ export default function Dashboard() {
             >
               <h3 className="font-black text-2xl mb-2 uppercase tracking-tight">{quiz.title}</h3>
               <p className="font-bold text-black/70 mb-6 flex-grow">{quiz.description}</p>
-              <div className="flex justify-between items-center mt-auto pt-4 border-t-4 border-black">
-                <Link to={`/quizzes/${quiz.id}`} className="brutalist-button brutalist-button-blue py-1 text-sm">
-                  PLAY NOW
+              <div className="flex flex-wrap gap-2 items-center mt-auto pt-4 border-t-4 border-black">
+                <Link to={`/quizzes/${quiz.id}`} className="brutalist-button brutalist-button-blue py-1 text-sm flex-grow text-center">
+                  PLAY
                 </Link>
-                <button onClick={() => onDelete(quiz)} className="brutalist-button brutalist-button-red py-1 text-sm">
-                  DELETE
-                </button>
+                {user.id === quiz.created_by && (
+                  <>
+                    <Link to={`/quizzes/${quiz.id}/edit`} className="brutalist-button brutalist-button-yellow py-1 text-sm">
+                      EDIT
+                    </Link>
+                    <button onClick={() => onDelete(quiz)} className="brutalist-button brutalist-button-red py-1 text-sm">
+                      DELETE
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}
