@@ -12,7 +12,7 @@ export default function PlayQuiz() {
   useEffect(() => {
     axiosClient.get(`/quizzes/${id}`)
       .then(({ data }) => {
-        setQuiz(data);
+        setQuiz(data.data);
         setLoading(false);
       })
       .catch(() => {

@@ -20,51 +20,43 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = auth('api')->login($user);
 
-        return response()->json([
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user,
-        ], 201);
+        return $this->respondWithToken($token, $user, 201);
     }
 
     public function login(LoginRequest $request)
     {
-        $user = User::where('email', $request->email)->first();
+        $credentials = $request->only('email', 'password');
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! $token = auth('api')->attempt($credentials)) {
             throw ValidationException::withMessages([
                 'email' => ['Invalid credentials'],
             ]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user,
-        ]);
+        return $this->respondWithToken($token, auth('api')->user());
     }
 
-    public function logout(Request $request)
+    public function logout()
     {
-        $request->user()->currentAccessToken()->delete();
+        auth('api')->logout();
 
         return response()->json(['message' => 'Logged out successfully']);
     }
 
-    public function refresh(Request $request)
+    public function refresh()
     {
-        $user = $request->user();
-        $user->currentAccessToken()->delete();
-        $token = $user->createToken('auth_token')->plainTextToken;
+        return $this->respondWithToken(auth('api')->refresh(), auth('api')->user());
+    }
 
+    protected function respondWithToken($token, $user, $status = 200)
+    {
         return response()->json([
             'access_token' => $token,
             'token_type' => 'Bearer',
+            'expires_in' => auth('api')->factory()->getTTL() * 60,
             'user' => $user,
-        ]);
+        ], $status);
     }
 }
